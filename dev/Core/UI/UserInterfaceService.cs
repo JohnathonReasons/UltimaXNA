@@ -38,6 +38,21 @@ namespace UltimaXNA.Core.UI
         private readonly InputManager m_Input;
 
         // ======================================================================
+        // Public properties
+        // ======================================================================
+
+        /// <summary>
+        /// An array of all open root controls in the user interface.
+        /// </summary>
+        public AControl[] Controls
+        {
+            get
+            {
+                return m_Controls.ToArray();
+            }
+        }
+
+        // ======================================================================
         // Ctor, Dispose, Update, and Draw
         // ======================================================================
 
@@ -152,6 +167,11 @@ namespace UltimaXNA.Core.UI
         /// <returns>If the control was added to the list of active controls, then returns the added control. If the control was not added, returns null.</returns>
         public AControl AddControl(AControl control, int x, int y)
         {
+            if (control.IsDisposed)
+            {
+                return null;
+            }
+
             control.Position = new Point(x, y);
             m_Controls.Insert(0, control);
             return control;
@@ -306,11 +326,11 @@ namespace UltimaXNA.Core.UI
             if ((MouseOverControl != null) && (focusedControl != MouseOverControl))
             {
                 MouseOverControl.MouseOut(clippedPosition);
-                // Also let the owner control know we've been moused out (for gumps).
-                if (MouseOverControl.OwnerTopmost != null)
+                // Also let the parent control know we've been moused out (for gumps).
+                if (MouseOverControl.RootParent != null)
                 {
-                    if (focusedControl == null || MouseOverControl.OwnerTopmost != focusedControl.OwnerTopmost)
-                        MouseOverControl.OwnerTopmost.MouseOut(clippedPosition);
+                    if (focusedControl == null || MouseOverControl.RootParent != focusedControl.RootParent)
+                        MouseOverControl.RootParent.MouseOut(clippedPosition);
                 }
             }
 
@@ -402,8 +422,8 @@ namespace UltimaXNA.Core.UI
         private void MakeTopMostGump(AControl control)
         {
             AControl c = control;
-            while (c.Owner != null)
-                c = c.Owner;
+            while (c.Parent != null)
+                c = c.Parent;
 
             for (int i = 0; i < m_Controls.Count; i++)
             {
@@ -526,13 +546,13 @@ namespace UltimaXNA.Core.UI
                 return;
 
             AControl dragTarget = control;
-            if (!dragTarget.IsMovable)
+            if (!dragTarget.IsMoveable)
                 return;
 
-            while (dragTarget.Owner != null)
-                dragTarget = dragTarget.Owner;
+            while (dragTarget.Parent != null)
+                dragTarget = dragTarget.Parent;
 
-            if (dragTarget.IsMovable)
+            if (dragTarget.IsMoveable)
             {
                 if (attemptAlwaysSuccessful)
                 {

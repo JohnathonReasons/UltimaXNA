@@ -10,42 +10,37 @@
  ***************************************************************************/
 #region usings
 using System.Collections.Generic;
-using UltimaXNA.Core.Audio;
 using UltimaXNA.Core.Diagnostics.Tracing;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
+using UltimaXNA.Core.Audio;
 #endregion
 
 namespace UltimaXNA.Ultima.Audio
 {
     public class AudioService
     {
-        private readonly Dictionary<int, UOSound> m_Sounds = new Dictionary<int, UOSound>();
-        private readonly Dictionary<int, UOMusic> m_Music = new Dictionary<int, UOMusic>();
+        private readonly Dictionary<int, ASound> m_Sounds = new Dictionary<int, ASound>();
+        private readonly Dictionary<int, ASound> m_Music = new Dictionary<int, ASound>();
 
-        private UOMusic m_MusicCurrentlyPlaying = null;
-        private XNAMP3 m_MusicCurrentlyPlayingMP3 = null;
+        private ASound m_MusicCurrentlyPlaying = null;
 
         public void PlaySound(int soundIndex)
         {
             if (Settings.Audio.SoundOn)
             {
-                UOSound sound;
+                ASound sound;
                 if (m_Sounds.TryGetValue(soundIndex, out sound))
                 {
-                    if (sound.Status == SoundState.Loaded)
-                        sound.Play();
+                    sound.Play();
                 }
                 else
                 {
-                    sound = new UOSound();
-                    m_Sounds.Add(soundIndex, sound);
                     string name;
                     byte[] data;
                     if (SoundData.TryGetSoundData(soundIndex, out data, out name))
                     {
-                        sound.Name = name;
-                        sound.WaveBuffer = data;
-                        sound.Status = SoundState.Loaded;
+                        sound = new UOSound(name, data);
+                        m_Sounds.Add(soundIndex, sound);
                         sound.Play();
                     }
                 }
@@ -59,7 +54,6 @@ namespace UltimaXNA.Ultima.Audio
                 if (id < 0) // not a valid id, used to stop music.
                 {
                     StopMusic();
-                    Tracer.Error("Received unknown music id {0}", id);
                     return;
                 }
 
@@ -78,31 +72,13 @@ namespace UltimaXNA.Ultima.Audio
                     }
                 }
 
-                UOMusic toPlay = m_Music[id];
+                ASound toPlay = m_Music[id];
                 if (toPlay != m_MusicCurrentlyPlaying)
                 {
                     // stop the current song
                     StopMusic();
-
-                    try
-                    {
-                        m_MusicCurrentlyPlaying = toPlay;
-                        m_MusicCurrentlyPlayingMP3 = new XNAMP3(toPlay.Path);
-                    }
-                    catch
-                    {
-                        Tracer.Error("Error opening mp3 file {0}", toPlay.Path);
-                        return;
-                    }
-
-                    try
-                    {
-                        m_MusicCurrentlyPlayingMP3.Play(toPlay.DoLoop);
-                    }
-                    catch
-                    {
-                        Tracer.Error("Error playing mp3 file {0}", toPlay.Path);
-                    }
+                    m_MusicCurrentlyPlaying = toPlay;
+                    m_MusicCurrentlyPlaying.Play();
                 }
             }
         }
@@ -111,9 +87,8 @@ namespace UltimaXNA.Ultima.Audio
         {
             if (m_MusicCurrentlyPlaying != null)
             {
-                m_MusicCurrentlyPlayingMP3.Stop();
-                m_MusicCurrentlyPlayingMP3.Dispose();
-                m_MusicCurrentlyPlayingMP3 = null;
+                m_MusicCurrentlyPlaying.Stop();
+                m_MusicCurrentlyPlaying.Dispose();
                 m_MusicCurrentlyPlaying = null;
             }
         }

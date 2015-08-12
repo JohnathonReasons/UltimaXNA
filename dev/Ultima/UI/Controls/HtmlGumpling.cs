@@ -9,14 +9,12 @@
  *
  ***************************************************************************/
 #region using
-
 using System;
 using Microsoft.Xna.Framework;
 using UltimaXNA.Core.Graphics;
 using UltimaXNA.Core.Input.Windows;
 using UltimaXNA.Core.UI;
 using UltimaXNA.Core.UI.HTML;
-using UltimaXNA.Ultima.UI.Interfaces;
 #endregion
 
 namespace UltimaXNA.Ultima.UI.Controls
@@ -62,7 +60,7 @@ namespace UltimaXNA.Ultima.UI.Controls
         public bool UseFlagScrollbar
         {
             get;
-            set;
+            private set;
         }
 
         public override int Width
@@ -80,8 +78,8 @@ namespace UltimaXNA.Ultima.UI.Controls
             }
         }
 
-        public HtmlGumpling(AControl owner, string[] arguements, string[] lines)
-            : base(owner)
+        public HtmlGumpling(AControl parent, string[] arguements, string[] lines)
+            : base(parent)
         {
             int x, y, width, height, textIndex, background, scrollbar;
             x = Int32.Parse(arguements[1]);
@@ -95,8 +93,8 @@ namespace UltimaXNA.Ultima.UI.Controls
             buildGumpling(x, y, width, height, background, scrollbar, "<font color=#000>" + lines[textIndex]);
         }
 
-        public HtmlGumpling(AControl owner, int x, int y, int width, int height, int background, int scrollbar, string text)
-            : base(owner)
+        public HtmlGumpling(AControl parent, int x, int y, int width, int height, int background, int scrollbar, string text)
+            : base(parent)
         {
             buildGumpling(x, y, width, height, background, scrollbar, text);
         }
@@ -120,16 +118,25 @@ namespace UltimaXNA.Ultima.UI.Controls
             if (HasScrollbar)
             {
                 if (UseFlagScrollbar)
+                {
                     AddControl(new ScrollFlag(this));
+                    m_Scrollbar = LastControl as IScrollBar;
+                    m_Scrollbar.Position = new Point(Width - 14, 0);
+                }
                 else
+                {
                     AddControl(new ScrollBar(this));
-                m_Scrollbar = LastControl as IScrollBar;
-                m_Scrollbar.Position = new Point(Width - 14, 0);
+                    m_Scrollbar = LastControl as IScrollBar;
+                    m_Scrollbar.Position = new Point(Width - 14, 0);
+                }
                 m_Scrollbar.Height = Height;
                 m_Scrollbar.MinValue = 0;
                 m_Scrollbar.MaxValue = m_RenderedText.Height - Height + (HasBackground ? 8 : 0);
                 ScrollY = m_Scrollbar.Value;
             }
+
+            if (Width != m_RenderedText.Width)
+                Width = m_RenderedText.Width;
         }
 
         public override void Update(double totalMS, double frameMS)
@@ -147,9 +154,7 @@ namespace UltimaXNA.Ultima.UI.Controls
             }
 
             if (Width != m_RenderedText.Width)
-            {
                 Width = m_RenderedText.Width;
-            }
             base.Update(totalMS, frameMS);
         }
 
@@ -157,8 +162,8 @@ namespace UltimaXNA.Ultima.UI.Controls
         {
             base.Draw(spriteBatch, position);
 
-            m_RenderedText.ActiveRegion = m_MouseOverHREF;
-            m_RenderedText.ActiveRegion_UseDownHue = m_IsMouseDown;
+            m_RenderedText.MouseOverRegionID = m_MouseOverHREF;
+            m_RenderedText.IsMouseDown = m_IsMouseDown;
             m_RenderedText.Draw(spriteBatch,
                 new Rectangle(position.X + (HasBackground ? 4 : 0), position.Y + (HasBackground ? 4 : 0),
                     Width - (HasBackground ? 8 : 0), Height - (HasBackground ? 8 : 0)), ScrollX, ScrollY);

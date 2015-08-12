@@ -14,9 +14,10 @@ using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
 using UltimaXNA.Core.Input.Windows;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.World;
 using UltimaXNA.Ultima.World.Entities.Items;
+using UltimaXNA.Core.Resources;
 
 namespace UltimaXNA.Ultima.UI.Controls
 {
@@ -40,8 +41,8 @@ namespace UltimaXNA.Ultima.UI.Controls
             private set;
         }
 
-        public ItemGumpling(AControl owner, Item item)
-            : base(owner)
+        public ItemGumpling(AControl parent, Item item)
+            : base(parent)
         {
             buildGumpling(item);
             HandlesMouseInput = true;
@@ -82,7 +83,8 @@ namespace UltimaXNA.Ultima.UI.Controls
         {
             if (m_texture == null)
             {
-                m_texture = ArtData.GetStaticTexture(Item.DisplayItemID);
+                IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                m_texture = provider.GetItemTexture(Item.DisplayItemID);
                 Size = new Point(m_texture.Width, m_texture.Height);
             }
             Vector3 hue = Utility.GetHueVector(IsMouseOver && HighlightOnMouseOver ? WorldView.MouseOverHue : Item.Hue);
@@ -186,7 +188,8 @@ namespace UltimaXNA.Ultima.UI.Controls
                 if (this is ItemGumplingPaperdoll)
                 {
                     int w, h;
-                    ArtData.GetStaticDimensions(Item.DisplayItemID, out w, out h);
+                    IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                    provider.GetItemDimensions(Item.DisplayItemID, out w, out h);
                     Point click_point = new Point(w / 2, h / 2);
                     m_World.Interaction.PickupItem(Item, InternalGetPickupOffset(click_point));
                 }

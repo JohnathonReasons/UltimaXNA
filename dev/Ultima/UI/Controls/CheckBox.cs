@@ -3,8 +3,9 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
 using UltimaXNA.Core.Input.Windows;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 
 namespace UltimaXNA.Ultima.UI.Controls
 {
@@ -21,14 +22,14 @@ namespace UltimaXNA.Ultima.UI.Controls
             protected set;
         }
 
-        public CheckBox(AControl owner)
-            : base(owner)
+        public CheckBox(AControl parent)
+            : base(parent)
         {
             HandlesMouseInput = true;
         }
 
-        public CheckBox(AControl owner, string[] arguements, string[] lines)
-            : this(owner)
+        public CheckBox(AControl parent, string[] arguements, string[] lines)
+            : this(parent)
         {
             int x, y, inactiveID, activeID, switchID;
             bool initialState;
@@ -43,16 +44,17 @@ namespace UltimaXNA.Ultima.UI.Controls
             buildGumpling(x, y, inactiveID, activeID, initialState, switchID);
         }
 
-        public CheckBox(AControl owner, int x, int y, int inactiveID, int activeID, bool initialState, int switchID)
-            : this(owner)
+        public CheckBox(AControl parent, int x, int y, int inactiveID, int activeID, bool initialState, int switchID)
+            : this(parent)
         {
             buildGumpling(x, y, inactiveID, activeID, initialState, switchID);
         }
 
         void buildGumpling(int x, int y, int inactiveID, int activeID, bool initialState, int switchID)
         {
-            m_Inactive = GumpData.GetGumpXNA(inactiveID);
-            m_Active = GumpData.GetGumpXNA(activeID);
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+            m_Inactive = provider.GetUITexture(inactiveID);
+            m_Active = provider.GetUITexture(activeID);
 
             Position = new Point(x, y);
             Size = new Point(m_Inactive.Width, m_Inactive.Height);

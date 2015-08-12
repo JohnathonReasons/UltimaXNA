@@ -1,3 +1,9 @@
+UltimaXNA includes a VERY limited HTML parser and layout engine. This parser
+does not conform to standard HTML practices, but rather implements the subset
+of HTML implemented by the legacy UO client. In addition, I've added some tags
+to help prettify text and layout, but these are VERY basic. For better or worse,
+the parser will ignore almost anything that it doesn't understand.
+
 HtmlGumpling controls support a very limited subset of Html tags:
 
 <b>
@@ -25,6 +31,8 @@ HtmlGumpling controls support a very limited subset of Html tags:
 
 <gumpimg>
     supported attributes: src, hoversrc, activesrc, width, height
+
+<itemimg>
     
 <span>
     attributes: width, height
@@ -34,5 +42,12 @@ note that ASCII fonts do not support coloring with these attributes.
 
 In addition, a very limited subset of CSS is supported using the "style=''"
 attribute:
-    font-family: ascii[0-9] / uni[0-2]
-    text-decoration: none / underline
+    "font-family: ascii[0-9] / uni[0-2];"
+    "text-decoration: none / underline;"
+    "top/left: 5;" sets the initial position of this element. Kinda like margin.
+    "layer: background;" takes the element out of the layout engine.
+
+Ideally, the HTML renderer, which is very limited at the moment, will lay out
+things in a new (but still limited) box model. In this model, there will be
+content tags and box tags. Box tags will effect layout; content tags will be
+moved inside the boxes.

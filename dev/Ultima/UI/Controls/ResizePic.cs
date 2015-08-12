@@ -12,8 +12,9 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 #endregion
 
 namespace UltimaXNA.Ultima.UI.Controls
@@ -23,15 +24,15 @@ namespace UltimaXNA.Ultima.UI.Controls
         Texture2D[] m_bgGumps = null;
         int GumpID = 0;
 
-        public ResizePic(AControl owner)
-            : base(owner)
+        public ResizePic(AControl parent)
+            : base(parent)
         {
             m_bgGumps = new Texture2D[9];
             MakeThisADragger();
         }
 
-        public ResizePic(AControl owner, string[] arguements)
-            : this(owner)
+        public ResizePic(AControl parent, string[] arguements)
+            : this(parent)
         {
             int x, y, gumpID, width, height;
             x = Int32.Parse(arguements[1]);
@@ -42,14 +43,14 @@ namespace UltimaXNA.Ultima.UI.Controls
             buildGumpling(x, y, gumpID, width, height);
         }
 
-        public ResizePic(AControl owner, int x, int y, int gumpID, int width, int height)
-            : this(owner)
+        public ResizePic(AControl parent, int x, int y, int gumpID, int width, int height)
+            : this(parent)
         {
             buildGumpling(x, y, gumpID, width, height);
         }
 
-        public ResizePic(AControl owner, AControl createBackgroundAroundThisControl)
-            : this(owner)
+        public ResizePic(AControl parent, AControl createBackgroundAroundThisControl)
+            : this(parent)
         {
             buildGumpling(createBackgroundAroundThisControl.X - 4, 
                 createBackgroundAroundThisControl.Y - 4, 
@@ -70,9 +71,10 @@ namespace UltimaXNA.Ultima.UI.Controls
         {
             if (m_bgGumps[0] == null)
             {
+                IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
                 for (int i = 0; i < 9; i++)
                 {
-                    m_bgGumps[i] = GumpData.GetGumpXNA(GumpID + i);
+                    m_bgGumps[i] = provider.GetUITexture(GumpID + i);
                 }
             }
 

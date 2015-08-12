@@ -8,20 +8,25 @@
  *
  ***************************************************************************/
 #region usings
-using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System.Collections.Generic;
 using UltimaXNA.Core.Graphics;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI.HTML;
 using UltimaXNA.Core.UI.HTML.Atoms;
+using UltimaXNA.Core.UI.HTML.Styles;
 #endregion
 
 namespace UltimaXNA.Core.UI
 {
+    /// <summary>
+    /// A texture containing rendered text. Can interpret html. Will automatically update.
+    /// </summary>
     class RenderedText
     {
         // private services
-        IUIResourceProvider m_ResourceProvider;
+        IResourceProvider m_ResourceProvider;
 
         public string Text
         {
@@ -40,7 +45,7 @@ namespace UltimaXNA.Core.UI
         {
             get
             {
-                renderIfNecessary();
+                RenderIfNecessary();
                 return m_Texture;
             }
         }
@@ -65,25 +70,19 @@ namespace UltimaXNA.Core.UI
             }
         }
 
-        public int LineCount
-        {
-            get;
-            private set;
-        }
-
         public Regions Regions
         {
             get;
             private set;
         }
 
-        public int ActiveRegion
+        public int MouseOverRegionID
         {
-            get { return m_ActiveRegion; }
-            set { m_ActiveRegion = value; }
+            get;
+            set;
         }
 
-        public bool ActiveRegion_UseDownHue
+        public bool IsMouseDown
         {
             get;
             set;
@@ -100,6 +99,8 @@ namespace UltimaXNA.Core.UI
             get { return m_MaxWidth; }
             set
             {
+                if (value <= 0)
+                    value = DefaultRenderedTextWidth;
                 if (m_MaxWidth != value)
                 {
                     m_MustRender = true;
@@ -109,17 +110,15 @@ namespace UltimaXNA.Core.UI
         }
 
         private const int DefaultRenderedTextWidth = 200;
+
         private Texture2D m_Texture;
-        private Reader m_HtmlParser;
         private string m_Text = string.Empty;
         private bool m_MustRender = true;
         private int m_MaxWidth;
-        private int m_ActiveRegion = -1;
-        private int[] m_LineWidths;
 
         public RenderedText(string text, int maxWidth = DefaultRenderedTextWidth)
         {
-            m_ResourceProvider = ServiceRegistry.GetService<IUIResourceProvider>();
+            m_ResourceProvider = ServiceRegistry.GetService<IResourceProvider>();
 
             Text = text;
             MaxWidth = maxWidth;
@@ -127,6 +126,10 @@ namespace UltimaXNA.Core.UI
             Regions = new Regions();
             Images = new Images();
         }
+
+        // ======================================================================
+        // Draw methods
+        // ======================================================================
 
         public void Draw(SpriteBatchUI sb, Point position, Vector3? hueVector = null)
         {
@@ -181,7 +184,7 @@ namespace UltimaXNA.Core.UI
                 Region r = Regions[i];
                 Point position;
                 Rectangle sourceRect;
-                if (clipRectangle(new Point(xScroll, yScroll), r.Area, destRectangle, out position, out sourceRect))
+                if (ClipRectangle(new Point(xScroll, yScroll), r.Area, destRectangle, out position, out sourceRect))
                 {
                     // only draw the font in a different color if this is a HREF region.
                     // otherwise it is a dummy region used to notify images that they are
@@ -189,8 +192,8 @@ namespace UltimaXNA.Core.UI
                     if (r.HREF != null)
                     {
                         int linkHue = 0;
-                        if (r.Index == m_ActiveRegion)
-                            if (ActiveRegion_UseDownHue)
+                        if (r.Index == MouseOverRegionID)
+                            if (IsMouseDown)
                                 linkHue = r.HREF.DownHue;
                             else
                                 linkHue = r.HREF.OverHue;
@@ -208,7 +211,7 @@ namespace UltimaXNA.Core.UI
                 Image image = Images[i];
                 Point position;
                 Rectangle sourceRect;
-                if (clipRectangle(new Point(xScroll, yScroll), image.Area, destRectangle, out position, out sourceRect))
+                if (ClipRectangle(new Point(xScroll, yScroll), image.Area, destRectangle, out position, out sourceRect))
                 {
                     Rectangle srcImage = new Rectangle(
                         sourceRect.X - image.Area.X, sourceRect.Y - image.Area.Y, 
@@ -216,9 +219,9 @@ namespace UltimaXNA.Core.UI
                     Texture2D texture = null;
 
                     // is the mouse over this image?
-                    if (image.RegionIndex == m_ActiveRegion)
+                    if (image.RegionIndex == MouseOverRegionID)
                     {
-                        if (ActiveRegion_UseDownHue)
+                        if (IsMouseDown)
                             texture = image.TextureDown;
                         if (texture == null)
                             texture = image.TextureOver;
@@ -229,13 +232,60 @@ namespace UltimaXNA.Core.UI
                     if (texture == null)
                         texture = image.Texture;
 
+                    if (srcImage.Width > texture.Width)
+                        srcImage.Width = texture.Width;
+                    if (srcImage.Height > texture.Height)
+                        srcImage.Height = texture.Height;
+
                     sb.Draw2D(texture, new Vector3(position.X, position.Y, 0),
                         srcImage, Utility.GetHueVector(0, false, false));
                 }
             }
         }
 
-        private void renderIfNecessary()
+        private bool ClipRectangle(Point offset, Rectangle srcRect, Rectangle clipTo, out Point posClipped, out Rectangle srcClipped)
+        {
+            posClipped = new Point(clipTo.X + srcRect.X - offset.X, clipTo.Y + srcRect.Y - offset.Y);
+            srcClipped = srcRect;
+
+            Rectangle dstClipped = srcRect;
+            dstClipped.X += clipTo.X - offset.X;
+            dstClipped.Y += clipTo.Y - offset.Y;
+
+            if (dstClipped.Bottom < clipTo.Top)
+                return false;
+            if (dstClipped.Top < clipTo.Top)
+            {
+                srcClipped.Y += (clipTo.Top - dstClipped.Top);
+                srcClipped.Height -= (clipTo.Top - dstClipped.Top);
+                posClipped.Y += (clipTo.Top - dstClipped.Top);
+            }
+            if (dstClipped.Top > clipTo.Bottom)
+                return false;
+            if (dstClipped.Bottom > clipTo.Bottom)
+                srcClipped.Height += (clipTo.Bottom - dstClipped.Bottom);
+
+            if (dstClipped.Right < clipTo.Left)
+                return false;
+            if (dstClipped.Left < clipTo.Left)
+            {
+                srcClipped.X += (clipTo.Left - dstClipped.Left);
+                srcClipped.Width -= (clipTo.Left - dstClipped.Left);
+                posClipped.X += (clipTo.Left - dstClipped.Left);
+            }
+            if (dstClipped.Left > clipTo.Right)
+                return false;
+            if (dstClipped.Right > clipTo.Right)
+                srcClipped.Width += (clipTo.Right - dstClipped.Right);
+
+            return true;
+        }
+
+        // ======================================================================
+        // Parse / Layout methods
+        // ======================================================================
+
+        private void RenderIfNecessary()
         {
             if (m_Texture == null || m_MustRender)
             {
@@ -249,61 +299,48 @@ namespace UltimaXNA.Core.UI
                 {
                     
                     SpriteBatchUI sb = ServiceRegistry.GetService<SpriteBatchUI>();
-                    int width, height, ascender, linecount;
-                    int[] lineWidths;
+                    int width, height, ascender;
 
-                    parseTextAndGetDimensions(Text, MaxWidth, out width, out height, out ascender, out linecount, out lineWidths);
-                    LineCount = linecount;
-                    m_LineWidths = lineWidths;
+                    List<AAtom> atoms = Atomizer.AtomizeHtml(Text);
+                    GetAllImages(atoms);
+                    Regions.Clear();
 
-                    m_Texture = renderTexture(sb.GraphicsDevice, m_HtmlParser, width, height, ascender);
+                    GetTextDimensions(atoms, MaxWidth, out width, out height, out ascender);
+                    m_Texture = RenderTexture(sb.GraphicsDevice, atoms, width, height, ascender);
 
                     m_MustRender = false;
                 }
             }
         }
 
-        private void parseTextAndGetDimensions(string textToRender, int maxWidth, out int width, out int height, out int ascender, out int linecount, out int[] lineWidths)
+        private void GetAllImages(List<AAtom> atoms)
         {
-            if (m_HtmlParser != null)
-                m_HtmlParser = null;
-            m_HtmlParser = new Reader(textToRender);
-
-            Regions.Clear();
             Images.Clear();
-            // get all the images!
-            foreach (AAtom atom in m_HtmlParser.Atoms)
+
+            foreach (AAtom atom in atoms)
             {
                 if (atom is ImageAtom)
                 {
                     ImageAtom img = (ImageAtom)atom;
-                    Texture2D standard = m_ResourceProvider.GetTexture(img.Style.GumpImgSrc);
-                    Texture2D over = m_ResourceProvider.GetTexture(img.Style.GumpImgSrcOver);
-                    Texture2D down = m_ResourceProvider.GetTexture(img.Style.GumpImgSrcDown);
-                    Images.AddImage(new Rectangle(), standard, over, down);
+                    if (img.ImageType == ImageAtom.ImageTypes.UI)
+                    {
+                        Texture2D standard = m_ResourceProvider.GetUITexture(img.Style.ImgSrc);
+                        Texture2D over = m_ResourceProvider.GetUITexture(img.Style.ImgSrcOver);
+                        Texture2D down = m_ResourceProvider.GetUITexture(img.Style.ImgSrcDown);
+                        Images.AddImage(new Rectangle(), standard, over, down);
+                    }
+                    else if (img.ImageType == ImageAtom.ImageTypes.Item)
+                    {
+                        Texture2D standard, over, down;
+                        standard = over = down = m_ResourceProvider.GetItemTexture(img.Style.ImgSrc);
+                        Images.AddImage(new Rectangle(), standard, over, down);
+                    }
                     img.AssociatedImage = Images[Images.Count - 1];
                 }
             }
-
-
-            if (maxWidth < 0)
-            {
-                width = 0;
-                height = 0;
-                ascender = 0;
-                linecount = 0;
-                lineWidths = null;
-            }
-            else
-            {
-                if (maxWidth == 0)
-                    getTextDimensions(m_HtmlParser, DefaultRenderedTextWidth, 0, out width, out height, out ascender, out linecount, out lineWidths);
-                else
-                    getTextDimensions(m_HtmlParser, maxWidth, 0, out width, out height, out ascender, out linecount, out lineWidths);
-            }
         }
 
-        Texture2D renderTexture(GraphicsDevice graphics, Reader reader, int width, int height, int ascender)
+        Texture2D RenderTexture(GraphicsDevice graphics, List<AAtom> atoms, int width, int height, int ascender)
         {
             if (width == 0) // empty text string
                 return new Texture2D(graphics, 1, 1);
@@ -330,41 +367,41 @@ namespace UltimaXNA.Core.UI
                     for (int i = 0; i < 3; i++)
                         alignedAtoms[i] = new List<AAtom>();
 
-                    for (int i = 0; i < reader.Length; i++)
+                    for (int i = 0; i < atoms.Count; i++)
                     {
-                        AAtom atom = reader.Atoms[i];
+                        AAtom atom = atoms[i];
                         alignedAtoms[(int)atom.Style.Alignment].Add(atom);
 
-                        if (atom.IsThisAtomALineBreak || (i == reader.Length - 1))
+                        if (atom.IsThisAtomALineBreak || (i == atoms.Count - 1))
                         {
                             // write left aligned text.
                             int dx;
                             if (alignedAtoms[0].Count > 0)
                             {
                                 alignedTextX[0] = dx = 0;
-                                renderTextureLine(alignedAtoms[0], rPtr, ref dx, dy, width, height, ref lineheight, true);
+                                RenderTextureLine(alignedAtoms[0], rPtr, ref dx, dy, width, height, ref lineheight, true);
                             }
 
                             // centered text. We need to get the width first. Do this by drawing the line with draw = false.
                             if (alignedAtoms[1].Count > 0)
                             {
                                 dx = 0;
-                                renderTextureLine(alignedAtoms[1], rPtr, ref dx, dy, width, height, ref lineheight, false);
+                                RenderTextureLine(alignedAtoms[1], rPtr, ref dx, dy, width, height, ref lineheight, false);
                                 alignedTextX[1] = dx = width / 2 - dx / 2;
-                                renderTextureLine(alignedAtoms[1], rPtr, ref dx, dy, width, height, ref lineheight, true);
+                                RenderTextureLine(alignedAtoms[1], rPtr, ref dx, dy, width, height, ref lineheight, true);
                             }
 
                             // right aligned text.
                             if (alignedAtoms[2].Count > 0)
                             {
                                 dx = 0;
-                                renderTextureLine(alignedAtoms[2], rPtr, ref dx, dy, width, height, ref lineheight, false);
+                                RenderTextureLine(alignedAtoms[2], rPtr, ref dx, dy, width, height, ref lineheight, false);
                                 alignedTextX[2] = dx = width - dx;
-                                renderTextureLine(alignedAtoms[2], rPtr, ref dx, dy, width, height, ref lineheight, true);
+                                RenderTextureLine(alignedAtoms[2], rPtr, ref dx, dy, width, height, ref lineheight, true);
                             }
 
                             // get HREF regions for html.
-                            getHREFRegions(Regions, alignedAtoms, alignedTextX, dy);
+                            GetHREFRegions(Regions, alignedAtoms, alignedTextX, dy);
 
                             // clear the aligned text lists so we can fill them up in our next pass.
                             for (int j = 0; j < 3; j++)
@@ -383,14 +420,16 @@ namespace UltimaXNA.Core.UI
             return result;
         }
 
-        // pass bool = false to get the width of the line to be drawn without actually drawing anything. Useful for aligning text.
-        unsafe void renderTextureLine(List<AAtom> atoms, uint* rPtr, ref int x, int y, int linewidth, int maxHeight, ref int lineheight, bool draw)
+        // draw = false to get the width of the line to be drawn without actually drawing anything. Useful for aligning text.
+        unsafe void RenderTextureLine(List<AAtom> atoms, uint* rPtr, ref int x, int y, int linewidth, int maxHeight, ref int lineheight, bool draw)
         {
             for (int i = 0; i < atoms.Count; i++)
             {
                 IFont font = atoms[i].Style.Font;
                 if (lineheight < font.Height)
                     lineheight = font.Height;
+                if (lineheight < atoms[i].Height + atoms[i].Style.ElementTopOffset)
+                    lineheight = atoms[i].Height + atoms[i].Style.ElementTopOffset;
 
                 if (draw)
                 {
@@ -405,17 +444,15 @@ namespace UltimaXNA.Core.UI
                     }
                     else if (atoms[i] is ImageAtom)
                     {
-                        if (lineheight < atoms[i].Height)
-                            lineheight = atoms[i].Height;
                         ImageAtom atom = (atoms[i] as ImageAtom);
-                        atom.AssociatedImage.Area = new Rectangle(x, y + ((lineheight - atom.Height) / 2), atom.Width, atom.Height);
+                        atom.AssociatedImage.Area = new Rectangle(x, y + ((lineheight - atom.Height + atoms[i].Style.ElementTopOffset) / 2), atom.Width, atom.Height);
                     }
                 }
                 x += atoms[i].Width;
             }
         }
 
-        void getHREFRegions(Regions regions, List<AAtom>[] text, int[] x, int y)
+        void GetHREFRegions(Regions regions, List<AAtom>[] text, int[] x, int y)
         {
             for (int alignment = 0; alignment < 3; alignment++)
             {
@@ -497,57 +534,63 @@ namespace UltimaXNA.Core.UI
             }
         }
 
-        void getTextDimensions(Reader reader, int maxwidth, int maxheight, out int width, out int height, out int ascender, out int linecount, out int[] lineWidths)
+        void GetTextDimensions(List<AAtom> atoms, int maxwidth, out int width, out int height, out int ascender)
         {
             // default values for out variables.
             width = 0;
             height = 0;
             ascender = 0;
-            linecount = 0;
-            lineWidths = null;
             // local variables
             int descenderHeight = 0;
             int lineHeight = 0;
             int styleWidth = 0; // italic + outlined characters need more room for the slant/outline.
             int widestLine = 0;
             int wordWidth = 0;
+            bool firstLine = true;
             List<AAtom> word = new List<AAtom>();
-            List<int> widths = new List<int>();
 
-            for (int i = 0; i < reader.Length; ++i)
+            bool hasLeftAlignment = false;
+            bool hasAnyOtherAlignment = false;
+            for (int i = 0; i < atoms.Count; i++)
             {
-                if (reader.Length > 500)
-                {
+                hasLeftAlignment = hasLeftAlignment | (atoms[i].Style.Alignment == Alignments.Left);
+                hasAnyOtherAlignment = hasAnyOtherAlignment | (atoms[i].Style.Alignment != Alignments.Left);
+            }
+            if (hasAnyOtherAlignment && hasLeftAlignment)
+            {
+                widestLine = maxwidth;
+            }
 
-                }
-
-                wordWidth += reader.Atoms[i].Width;
-                styleWidth -= reader.Atoms[i].Width;
+            for (int i = 0; i < atoms.Count; i++)
+            {
+                wordWidth += atoms[i].Width;
+                styleWidth -= atoms[i].Width;
                 if (styleWidth < 0)
                     styleWidth = 0;
 
-                if (lineHeight < reader.Atoms[i].Height)
-                    lineHeight = reader.Atoms[i].Height;
-
-                if (reader.Atoms[i].IsThisAtomALineBreak)
+                if (lineHeight < atoms[i].Height + atoms[i].Style.ElementTopOffset)
                 {
-                    widths.Add(width + styleWidth);
+                    lineHeight = atoms[i].Height + atoms[i].Style.ElementTopOffset;
+                }
+
+                if (atoms[i].IsThisAtomALineBreak)
+                {
                     if (width + styleWidth > widestLine)
                         widestLine = width + styleWidth;
                     height += lineHeight;
-                    linecount += 1;
                     descenderHeight = 0;
                     lineHeight = 0;
                     width = 0;
+                    firstLine = false;
                 }
                 else
                 {
-                    word.Add(reader.Atoms[i]);
+                    word.Add(atoms[i]);
 
                     // we may need to add additional width for special style characters.
-                    if (reader.Atoms[i] is CharacterAtom)
+                    if (atoms[i] is CharacterAtom)
                     {
-                        CharacterAtom atom = (CharacterAtom)reader.Atoms[i];
+                        CharacterAtom atom = (CharacterAtom)atoms[i];
                         IFont font = atom.Style.Font;
                         ICharacter ch = font.GetCharacter(atom.Character);
 
@@ -558,14 +601,11 @@ namespace UltimaXNA.Core.UI
                             styleWidth += 2;
                         if (ch.YOffset + ch.Height - lineHeight > descenderHeight)
                             descenderHeight = ch.YOffset + ch.Height - lineHeight;
-                        if (ch.YOffset < 0 && linecount == 0 && ascender > ch.YOffset)
+                        if (ch.YOffset < 0 && firstLine && ascender > ch.YOffset)
                             ascender = ch.YOffset;
                     }
 
-                    if (reader.Atoms[i].Style.Alignment != Alignments.Left)
-                        widestLine = maxwidth;
-
-                    if (i == reader.Length - 1 || reader.Atoms[i + 1].CanBreakAtThisAtom)
+                    if (i == atoms.Count - 1 || atoms[i + 1].CanBreakAtThisAtom)
                     {
                         // Now make sure this line can fit the word.
                         if (width + wordWidth + styleWidth <= maxwidth)
@@ -575,9 +615,9 @@ namespace UltimaXNA.Core.UI
                             wordWidth = 0;
                             word.Clear();
                             // if this word is followed by a space, does it fit? If not, drop it entirely and insert \n after the word.
-                            if (!(i == reader.Length - 1) && reader.Atoms[i + 1].IsThisAtomABreakingSpace)
+                            if (!(i == atoms.Count - 1) && atoms[i + 1].IsThisAtomABreakingSpace)
                             {
-                                int charwidth = reader.Atoms[i + 1].Width;
+                                int charwidth = atoms[i + 1].Width;
                                 if (width + charwidth <= maxwidth)
                                 {
                                     // we can fit an extra space here.
@@ -587,7 +627,7 @@ namespace UltimaXNA.Core.UI
                                 else
                                 {
                                     // can't fit an extra space on the end of the line. replace the space with a \n.
-                                    ((CharacterAtom)reader.Atoms[i + 1]).Character = '\n';
+                                    ((CharacterAtom)atoms[i + 1]).Character = '\n';
                                 }
                             }
                         }
@@ -598,15 +638,15 @@ namespace UltimaXNA.Core.UI
                             {
                                 // if this is the last word in a line. Replace the last space character with a line break
                                 // and back up to the beginning of this word.
-                                if (reader.Atoms[i - word.Count].IsThisAtomABreakingSpace)
+                                if (atoms[i - word.Count].IsThisAtomABreakingSpace)
                                 {
-                                    ((CharacterAtom)reader.Atoms[i - word.Count]).Character = '\n';
+                                    ((CharacterAtom)atoms[i - word.Count]).Character = '\n';
                                     i = i - word.Count - 1;
                                 }
                                 else
                                 {
-                                    StyleState inheritedStyle = reader.Atoms[i - word.Count].Style;
-                                    reader.Atoms.Insert(i - word.Count, new CharacterAtom(inheritedStyle, '\n'));
+                                    StyleState inheritedStyle = atoms[i - word.Count].Style;
+                                    atoms.Insert(i - word.Count, new CharacterAtom(inheritedStyle, '\n'));
                                     i = i - word.Count;
                                 }
                                 word.Clear();
@@ -623,9 +663,9 @@ namespace UltimaXNA.Core.UI
                                     int iDashWidth = word[j].Style.Font.GetCharacter('-').Width;
                                     if (iWordWidth + iDashWidth <= maxwidth)
                                     {
-                                        StyleState inheritedStyle = reader.Atoms[i - (word.Count - j) + 1].Style;
-                                        reader.Atoms.Insert(i - (word.Count - j) + 1, new CharacterAtom(inheritedStyle, '\n'));
-                                        reader.Atoms.Insert(i - (word.Count - j) + 1, new CharacterAtom(inheritedStyle, '-'));
+                                        StyleState inheritedStyle = atoms[i - (word.Count - j) + 1].Style;
+                                        atoms.Insert(i - (word.Count - j) + 1, new CharacterAtom(inheritedStyle, '\n'));
+                                        atoms.Insert(i - (word.Count - j) + 1, new CharacterAtom(inheritedStyle, '-'));
                                         break;
                                     }
                                     iWordWidth -= word[j].Width;
@@ -648,48 +688,10 @@ namespace UltimaXNA.Core.UI
 
             width += styleWidth;
             height += lineHeight + descenderHeight;
-            linecount += 1;
-            widths.Add(width);
             if (widestLine > width)
                 width = widestLine;
         }
 
-        private bool clipRectangle(Point offset, Rectangle srcRect, Rectangle clipTo, out Point posClipped, out Rectangle srcClipped)
-        {
-            posClipped = new Point(clipTo.X + srcRect.X - offset.X, clipTo.Y + srcRect.Y - offset.Y);
-            srcClipped = srcRect;
-
-            Rectangle dstClipped = srcRect;
-            dstClipped.X += clipTo.X - offset.X;
-            dstClipped.Y += clipTo.Y - offset.Y;
-
-            if (dstClipped.Bottom < clipTo.Top)
-                return false;
-            if (dstClipped.Top < clipTo.Top)
-            {
-                srcClipped.Y += (clipTo.Top - dstClipped.Top);
-                srcClipped.Height -= (clipTo.Top - dstClipped.Top);
-                posClipped.Y += (clipTo.Top - dstClipped.Top);
-            }
-            if (dstClipped.Top > clipTo.Bottom)
-                return false;
-            if (dstClipped.Bottom > clipTo.Bottom)
-                srcClipped.Height += (clipTo.Bottom - dstClipped.Bottom);
-
-            if (dstClipped.Right < clipTo.Left)
-                return false;
-            if (dstClipped.Left < clipTo.Left)
-            {
-                srcClipped.X += (clipTo.Left - dstClipped.Left);
-                srcClipped.Width -= (clipTo.Left - dstClipped.Left);
-                posClipped.X += (clipTo.Left - dstClipped.Left);
-            }
-            if (dstClipped.Left > clipTo.Right)
-                return false;
-            if (dstClipped.Right > clipTo.Right)
-                srcClipped.Width += (clipTo.Right - dstClipped.Right);
-
-            return true;
-        }
+        
     }
 }

@@ -11,7 +11,7 @@
 #region usings
 using System.Collections.Generic;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.UI.Controls;
 using UltimaXNA.Ultima.World.Entities;
 using UltimaXNA.Ultima.World.Entities.Items;
@@ -31,7 +31,7 @@ namespace UltimaXNA.Ultima.UI.WorldGumps
             AddControl(new Button(this, 40, 77, 0x817, 0x818, ButtonTypes.Activate, 0, 0));
             AddControl(new Button(this, 100, 77, 0x81A, 0x81B, ButtonTypes.Activate, 1, 1));
 
-            IsMovable = false;
+            IsMoveable = false;
             MetaData.IsModal = true;
         }
 

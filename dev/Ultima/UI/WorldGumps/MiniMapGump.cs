@@ -14,7 +14,8 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
 using UltimaXNA.Core.Input.Windows;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Core.Resources;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.World.Entities;
 #endregion
 
@@ -40,7 +41,7 @@ namespace UltimaXNA.Ultima.UI.WorldGumps
 
             m_useLargeMap = MiniMap_LargeFormat;
 
-            IsMovable = true;
+            IsMoveable = true;
             MakeThisADragger();
         }
 
@@ -59,7 +60,8 @@ namespace UltimaXNA.Ultima.UI.WorldGumps
                 {
                     m_GumpTexture = null;
                 }
-                m_GumpTexture = GumpData.GetGumpXNA((m_useLargeMap ? 5011 : 5010), true);
+                IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                m_GumpTexture = provider.GetUITexture((m_useLargeMap ? 5011 : 5010), true);
                 Size = new Point(m_GumpTexture.Width, m_GumpTexture.Height);
             }
 
@@ -68,7 +70,7 @@ namespace UltimaXNA.Ultima.UI.WorldGumps
 
         public override void Draw(SpriteBatchUI spriteBatch, Point position)
         {
-            AEntity player = WorldModel.Entities.GetPlayerObject();
+            AEntity player = WorldModel.Entities.GetPlayerEntity();
             float x = (float)Math.Round((player.Position.X % 256) + player.Position.X_offset) / 256f;
             float y = (float)Math.Round((player.Position.Y % 256) + player.Position.Y_offset) / 256f;
             Vector3 playerPosition = new Vector3(x - y, x + y, 0f);

@@ -10,9 +10,9 @@
 
 using Microsoft.Xna.Framework;
 using UltimaXNA.Core.Graphics;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
 using UltimaXNA.Ultima.Data;
-using UltimaXNA.Ultima.IO;
 
 namespace UltimaXNA.Ultima.UI.Controls
 {
@@ -73,14 +73,14 @@ namespace UltimaXNA.Ultima.UI.Controls
             get { return m_equipmentSlots[(int)slot]; }
         }
 
-        PaperdollLargeUninteractable(AControl owner)
-            : base(owner)
+        PaperdollLargeUninteractable(AControl parent)
+            : base(parent)
         {
 
         }
 
-        public PaperdollLargeUninteractable(AControl owner, int x, int y)
-            : this(owner)
+        public PaperdollLargeUninteractable(AControl parent, int x, int y)
+            : this(parent)
         {
             Position = new Point(x, y);
         }
@@ -134,7 +134,11 @@ namespace UltimaXNA.Ultima.UI.Controls
                 }
 
                 if (bodyID != 0)
-                    spriteBatch.Draw2D(GumpData.GetGumpXNA(bodyID), new Vector3(position.X, position.Y, 0), Utility.GetHueVector(hue, hueGreyPixelsOnly, false));
+                {
+                    // this is silly, we should be keeping a local copy of the body texture.
+                    IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                    spriteBatch.Draw2D(provider.GetUITexture(bodyID), new Vector3(position.X, position.Y, 0), Utility.GetHueVector(hue, hueGreyPixelsOnly, false));
+                }
             }
         }
 

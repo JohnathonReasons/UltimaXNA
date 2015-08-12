@@ -8,12 +8,12 @@
  *
  ***************************************************************************/
 
-using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System;
 using UltimaXNA.Core.Graphics;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
 
 namespace UltimaXNA.Ultima.UI.Controls
 {
@@ -22,14 +22,14 @@ namespace UltimaXNA.Ultima.UI.Controls
         Texture2D m_bgGump = null;
         int m_gumpID;
 
-        public GumpPicTiled(AControl owner)
-            : base(owner)
+        public GumpPicTiled(AControl parent)
+            : base(parent)
         {
 
         }
 
-        public GumpPicTiled(AControl owner, string[] arguements)
-            : this(owner)
+        public GumpPicTiled(AControl parent, string[] arguements)
+            : this(parent)
         {
             int x, y, gumpID, width, height;
             x = Int32.Parse(arguements[1]);
@@ -40,8 +40,8 @@ namespace UltimaXNA.Ultima.UI.Controls
             buildGumpling(x, y, width, height, gumpID);
         }
 
-        public GumpPicTiled(AControl owner, int x, int y, int width, int height, int gumpID)
-            : this(owner)
+        public GumpPicTiled(AControl parent, int x, int y, int width, int height, int gumpID)
+            : this(parent)
         {
             buildGumpling(x, y, width, height, gumpID);
         }
@@ -57,7 +57,8 @@ namespace UltimaXNA.Ultima.UI.Controls
         {
             if (m_bgGump == null)
             {
-                m_bgGump = GumpData.GetGumpXNA(m_gumpID);
+                IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                m_bgGump = provider.GetUITexture(m_gumpID);
             }
             base.Update(totalMS, frameMS);
         }

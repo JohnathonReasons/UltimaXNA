@@ -24,9 +24,10 @@ using UltimaXNA.Core.Network;
 using UltimaXNA.Core.UI;
 using UltimaXNA.Ultima;
 using UltimaXNA.Ultima.Audio;
+using UltimaXNA.Ultima.Resources;
+using UltimaXNA.Ultima.Resources.Fonts;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Ultima.IO;
-using UltimaXNA.Ultima.IO.Fonts;
-using UltimaXNA.Ultima.UI;
 #endregion
 
 namespace UltimaXNA
@@ -139,7 +140,6 @@ namespace UltimaXNA
             // Create all the services we need.
             ServiceRegistry.Register<SpriteBatch3D>(new SpriteBatch3D(this));
             ServiceRegistry.Register<SpriteBatchUI>(new SpriteBatchUI(this));
-            ServiceRegistry.Register<IUIResourceProvider>(new UltimaUIResourceProvider());
             ServiceRegistry.Register<AudioService>(new AudioService());
             Network = ServiceRegistry.Register<INetworkClient>(new NetworkClient());
             Input = ServiceRegistry.Register<InputManager>(new InputManager(Window.Handle));
@@ -150,13 +150,11 @@ namespace UltimaXNA
             if (FileManager.IsUODataPresent)
             {
                 // Initialize and load data
-                AnimData.Initialize();
-                ArtData.Initialize(GraphicsDevice);
-                TextUni.Initialize(GraphicsDevice);
-                GumpData.Initialize(GraphicsDevice);
+                IResourceProvider provider = new ResourceProvider(this);
+                provider.RegisterResource<EffectData>(new EffectDataResource());
+                ServiceRegistry.Register<IResourceProvider>(provider);
+
                 HueData.Initialize(GraphicsDevice);
-                TexmapData.Initialize(GraphicsDevice);
-                StringData.LoadStringList("enu");
                 SkillsData.Initialize();
                 GraphicsDevice.Textures[1] = HueData.HueTexture0;
                 GraphicsDevice.Textures[2] = HueData.HueTexture1;
@@ -201,7 +199,8 @@ namespace UltimaXNA
                 TotalMS = totalMS;
                 Input.Update(totalMS, frameMS);
                 UserInterface.Update(totalMS, frameMS);
-                Network.Slice();
+                if (Network.IsConnected)
+                    Network.Slice();
                 ActiveModel.Update(totalMS, frameMS);
             }
 
@@ -247,14 +246,14 @@ namespace UltimaXNA
                 100d * (frame_time_drawing / frame_time),
                 100d * (frame_time_updating / frame_time),
                 last_draw_ms,
-                gameTime.IsRunningSlowly ? "IsRunningSlowly" : string.Empty);
+                gameTime.IsRunningSlowly ? "*" : string.Empty);
         }
 
         public void SetupWindowForLogin()
         {
             Restore();
             Window.AllowUserResizing = false;
-            SetGraphicsDeviceWidthHeight(new Resolution(800, 600)); // a wee bit bigger than legacy. Looks nicer.
+            SetGraphicsDeviceWidthHeight(new ResolutionConfig(800, 600)); // a wee bit bigger than legacy. Looks nicer.
         }
 
         public void SetupWindowForWorld()
@@ -275,7 +274,7 @@ namespace UltimaXNA
             }
             else
             {
-                Settings.World.WindowResolution = new Resolution(GraphicsDeviceManager.PreferredBackBufferWidth, GraphicsDeviceManager.PreferredBackBufferHeight);
+                Settings.World.WindowResolution = new ResolutionConfig(GraphicsDeviceManager.PreferredBackBufferWidth, GraphicsDeviceManager.PreferredBackBufferHeight);
             }
         }
 
@@ -346,7 +345,7 @@ namespace UltimaXNA
         private void OnWindowSizeChanged(object sender, EventArgs e)
         {
             GameWindow window = (sender as GameWindow);
-            Resolution resolution = new Resolution(window.ClientBounds.Width, window.ClientBounds.Height);
+            ResolutionConfig resolution = new ResolutionConfig(window.ClientBounds.Width, window.ClientBounds.Height);
             // this only occurs when the world is active. Make sure that we don't reduce the window size
             // smaller than the world gump size.
             if (resolution.Width < Settings.World.PlayWindowGumpResolution.Width)
@@ -356,7 +355,7 @@ namespace UltimaXNA
             SetGraphicsDeviceWidthHeight(resolution);
         }
 
-        private void SetGraphicsDeviceWidthHeight(Resolution resolution)
+        private void SetGraphicsDeviceWidthHeight(ResolutionConfig resolution)
         {
             GraphicsDeviceManager.PreferredBackBufferWidth = resolution.Width;
             GraphicsDeviceManager.PreferredBackBufferHeight = resolution.Height;

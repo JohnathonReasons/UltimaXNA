@@ -12,9 +12,9 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
 using UltimaXNA.Core.Input.Windows;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
-using UltimaXNA.Ultima.UI.Interfaces;
+using UltimaXNA.Ultima.Resources;
 #endregion
 
 namespace UltimaXNA.Ultima.UI.Controls
@@ -89,14 +89,14 @@ namespace UltimaXNA.Ultima.UI.Controls
         // ================================================================================
         // Ctor, Initialize, Update, and Draw
         // ================================================================================
-        public ScrollFlag(AControl owner)
-            : base(owner)
+        public ScrollFlag(AControl parent)
+            : base(parent)
         {
             HandlesMouseInput = true;
         }
 
-        public ScrollFlag(AControl owner, int x, int y, int height, int minValue, int maxValue, int value)
-            : this(owner)
+        public ScrollFlag(AControl parent, int x, int y, int height, int minValue, int maxValue, int value)
+            : this(parent)
         {
             Position = new Point(x, y);
             m_SliderExtentTop = y;
@@ -111,7 +111,8 @@ namespace UltimaXNA.Ultima.UI.Controls
         {
             base.OnInitialize();
 
-            m_GumpSlider = GumpData.GetGumpXNA(0x0828);
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+            m_GumpSlider = provider.GetUITexture(0x0828);
             Size = new Point(m_GumpSlider.Width, m_GumpSlider.Height);
         }
 
@@ -130,7 +131,14 @@ namespace UltimaXNA.Ultima.UI.Controls
         public override void Draw(SpriteBatchUI spriteBatch, Point position)
         {
             // draw slider
-            spriteBatch.Draw2D(m_GumpSlider, new Vector3(position.X, position.Y + m_SliderPosition, 0), Vector3.Zero);
+            if (MaxValue == MinValue)
+            {
+                // do nothing.
+            }
+            else
+            {
+                spriteBatch.Draw2D(m_GumpSlider, new Vector3(position.X - 5, position.Y + m_SliderPosition, 0), Vector3.Zero);
+            }
 
             base.Draw(spriteBatch, position);
         }
@@ -153,6 +161,7 @@ namespace UltimaXNA.Ultima.UI.Controls
 
         protected override bool IsPointWithinControl(int x, int y)
         {
+            x -= 5;
             Rectangle slider = new Rectangle(0, (int)m_SliderPosition, m_GumpSlider.Width, m_GumpSlider.Height);
             return slider.Contains(x, y);
         }

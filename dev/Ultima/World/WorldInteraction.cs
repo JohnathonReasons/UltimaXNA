@@ -17,12 +17,13 @@ using UltimaXNA.Core.UI;
 using UltimaXNA.Ultima.Data;
 using UltimaXNA.Ultima.Network.Client;
 using UltimaXNA.Ultima.Player;
-using UltimaXNA.Ultima.UI;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.UI.WorldGumps;
 using UltimaXNA.Ultima.World.Entities;
 using UltimaXNA.Ultima.World.Entities.Items;
 using UltimaXNA.Ultima.World.Entities.Items.Containers;
 using UltimaXNA.Ultima.World.Entities.Mobiles;
+using UltimaXNA.Ultima.UI;
 #endregion
 
 namespace UltimaXNA.Ultima.World
@@ -79,7 +80,7 @@ namespace UltimaXNA.Ultima.World
 
         public void ToggleWarMode() // used by paperdollgump.
         {
-            m_Network.Send(new RequestWarModePacket(!((Mobile)WorldModel.Entities.GetPlayerObject()).Flags.IsWarMode));
+            m_Network.Send(new RequestWarModePacket(!((Mobile)WorldModel.Entities.GetPlayerEntity()).Flags.IsWarMode));
         }
 
         public void UseSkill(int index) // used by WorldInteraction
@@ -169,25 +170,9 @@ namespace UltimaXNA.Ultima.World
 
         public void CreateLabel(MessageTypes msgType, Serial serial, string text, int hue, int font)
         {
-            Overhead overhead;
-
             if (serial.IsValid)
             {
-                overhead = WorldModel.Entities.AddOverhead(msgType, serial, "<outline>" + text, font, hue);
-                // Labels that are longer than the current name should be set as the name
-                if (serial.IsMobile)
-                {
-                    Mobile m = WorldModel.Entities.GetObject<Mobile>(serial, false);
-                    if (m == null)
-                    {
-                        // received a label for a mobile that does not exist!
-                    }
-                    else
-                    {
-                        if (m.Name == null || m.Name.Length < text.Length)
-                            m.Name = text;
-                    }
-                }
+                WorldModel.Entities.AddOverhead(msgType, serial, "<outline>" + text, font, hue);
             }
             else
             {

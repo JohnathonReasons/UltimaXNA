@@ -15,14 +15,16 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using UltimaXNA.Core.Diagnostics.Tracing;
+using UltimaXNA.Core.Input;
 using UltimaXNA.Core.Network;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
 using UltimaXNA.Ultima.Audio;
 using UltimaXNA.Ultima.Data;
-using UltimaXNA.Ultima.IO;
 using UltimaXNA.Ultima.Network.Client;
 using UltimaXNA.Ultima.Network.Server;
 using UltimaXNA.Ultima.Player;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.UI;
 using UltimaXNA.Ultima.UI.WorldGumps;
 using UltimaXNA.Ultima.World.Entities;
@@ -31,7 +33,6 @@ using UltimaXNA.Ultima.World.Entities.Items.Containers;
 using UltimaXNA.Ultima.World.Entities.Mobiles;
 using UltimaXNA.Ultima.World.Entities.Multis;
 using UltimaXNA.Ultima.World.Input;
-using UltimaXNA.Core.Input;
 #endregion
 
 namespace UltimaXNA.Ultima.World
@@ -51,7 +52,6 @@ namespace UltimaXNA.Ultima.World
             m_World = world;
 
             m_RegisteredHandlers = new List<Tuple<int, TypedPacketReceiveHandler>>();
-
             m_Network = ServiceRegistry.GetService<INetworkClient>();
             m_UserInterface = ServiceRegistry.GetService<UserInterfaceService>();
         }
@@ -286,7 +286,7 @@ namespace UltimaXNA.Ultima.World
         private void ReceiveAddMultipleItemsToContainer(IRecvPacket packet)
         {
             ContainerContentPacket p = (ContainerContentPacket)packet;
-            foreach (ContentItem i in p.Items)
+            foreach (ItemInContainer i in p.Items)
             {
                 // Add the item...
                 Item item = add_Item(i.Serial, i.ItemID, i.Hue, i.ContainerSerial, i.Amount);
@@ -444,7 +444,7 @@ namespace UltimaXNA.Ultima.World
                     m_Network.Send(new QueryPropertiesPacket(item.Serial));
             }
 
-            if (mobile.Name == string.Empty)
+            if (mobile.Name == null || mobile.Name == string.Empty)
             {
                 mobile.Name = "Unknown";
                 m_Network.Send(new RequestNamePacket(p.Serial));
@@ -526,7 +526,7 @@ namespace UltimaXNA.Ultima.World
             mobile.Flags = p.Flags;
             mobile.Notoriety = p.Notoriety;
 
-            if (mobile is PlayerMobile)
+            if (mobile.IsClientEntity)
                 return;
 
             if (mobile.Position.IsNullPosition)
@@ -551,7 +551,7 @@ namespace UltimaXNA.Ultima.World
             mobile.Hue = (int)p.Hue;
             mobile.Move_Instant(p.X, p.Y, p.Z, p.Direction);
 
-            if (mobile.Name == string.Empty)
+            if (mobile.Name == null || mobile.Name == string.Empty)
             {
                 mobile.Name = "Unknown";
                 m_Network.Send(new RequestNamePacket(p.Serial));
@@ -561,7 +561,7 @@ namespace UltimaXNA.Ultima.World
         private void ReceiveMoveAck(IRecvPacket packet)
         {
             MoveAcknowledgePacket p = (MoveAcknowledgePacket)packet;
-            Mobile player = (Mobile)WorldModel.Entities.GetPlayerObject();
+            Mobile player = (Mobile)WorldModel.Entities.GetPlayerEntity();
             player.PlayerMobile_MoveEventAck(p.Sequence);
             player.Notoriety = p.Notoriety;
         }
@@ -569,7 +569,7 @@ namespace UltimaXNA.Ultima.World
         private void ReceiveMoveRej(IRecvPacket packet)
         {
             MovementRejectPacket p = (MovementRejectPacket)packet;
-            Mobile player = (Mobile)WorldModel.Entities.GetPlayerObject();
+            Mobile player = (Mobile)WorldModel.Entities.GetPlayerEntity();
             player.PlayerMobile_MoveEventRej(p.Sequence, p.X, p.Y, p.Z, p.Direction);
         }
 
@@ -633,7 +633,7 @@ namespace UltimaXNA.Ultima.World
         private void ReceiveWarMode(IRecvPacket packet)
         {
             WarModePacket p = (WarModePacket)packet;
-            ((Mobile)WorldModel.Entities.GetPlayerObject()).Flags.IsWarMode = p.WarMode;
+            ((Mobile)WorldModel.Entities.GetPlayerEntity()).Flags.IsWarMode = p.WarMode;
         }
 
         private void ReceiveUpdateMana(IRecvPacket packet)
@@ -671,8 +671,10 @@ namespace UltimaXNA.Ultima.World
         {
             MessageLocalizedPacket p = (MessageLocalizedPacket)packet;
 
-            string iCliLoc = constructCliLoc(StringData.Entry(p.CliLocNumber), p.Arguements);
-            ReceiveTextMessage(p.MessageType, iCliLoc, p.Hue, p.Font, p.Serial, p.SpeakerName);
+            // get the resource provider
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+            string strCliLoc = constructCliLoc(provider.GetString(p.CliLocNumber), p.Arguements);
+            ReceiveTextMessage(p.MessageType, strCliLoc, p.Hue, p.Font, p.Serial, p.SpeakerName);
         }
 
         private void ReceiveAsciiMessage(IRecvPacket packet)
@@ -687,34 +689,62 @@ namespace UltimaXNA.Ultima.World
             ReceiveTextMessage(p.MsgType, p.SpokenText, p.Hue, p.Font, p.Serial, p.SpeakerName);
         }
 
-        private string constructCliLoc(string nBase, string nArgs)
+        private string constructCliLoc(string baseCliloc, string arg = null, bool capitalize = false)
         {
-            string[] iArgs = nArgs.Split('\t');
-            for (int i = 0; i < iArgs.Length; i++)
-            {
-                if ((iArgs[i].Length > 0) && (iArgs[i].Substring(0, 1) == "#"))
-                {
-                    int clilocID = Convert.ToInt32(iArgs[i].Substring(1));
-                    iArgs[i] = StringData.Entry(clilocID);
-                }
-            }
+            if (string.IsNullOrEmpty(baseCliloc))
+                return string.Empty;
 
-            string iConstruct = nBase;
-            for (int i = 0; i < iArgs.Length; i++)
+            // get the resource provider
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+
+            if (arg == null)
             {
-                int iBeginReplace = iConstruct.IndexOf('~', 0);
-                int iEndReplace = iConstruct.IndexOf('~', iBeginReplace + 1);
-                if ((iBeginReplace != -1) && (iEndReplace != -1))
+                if (capitalize)
                 {
-                    iConstruct = iConstruct.Substring(0, iBeginReplace) + iArgs[i] + iConstruct.Substring(iEndReplace + 1, iConstruct.Length - iEndReplace - 1);
+                    return Utility.CapitalizeFirstCharacter(baseCliloc);
                 }
                 else
                 {
-                    iConstruct = nBase;
+                    return baseCliloc;
+                }
+            }
+            else
+            {
+                string[] args = arg.Split('\t');
+                for (int i = 0; i < args.Length; i++)
+                {
+                    if ((args[i].Length > 0) && (args[i].Substring(0, 1) == "#"))
+                    {
+                        int clilocID = Convert.ToInt32(args[i].Substring(1));
+                        args[i] = provider.GetString(clilocID);
+                    }
                 }
 
+                string construct = baseCliloc;
+                for (int i = 0; i < args.Length; i++)
+                {
+                    int iBeginReplace = construct.IndexOf('~', 0);
+                    int iEndReplace = construct.IndexOf('~', iBeginReplace + 1);
+                    if ((iBeginReplace != -1) && (iEndReplace != -1))
+                    {
+                        construct = construct.Substring(0, iBeginReplace) + args[i] + construct.Substring(iEndReplace + 1, construct.Length - iEndReplace - 1);
+                    }
+                    else
+                    {
+                        construct = baseCliloc;
+                    }
+
+                }
+
+                if (capitalize)
+                {
+                    return Utility.CapitalizeFirstCharacter(construct);
+                }
+                else
+                {
+                    return construct;
+                }
             }
-            return iConstruct;
         }
 
         private void ReceiveTextMessage(MessageTypes msgType, string text, int hue, int font, Serial serial, string speakerName)
@@ -725,6 +755,7 @@ namespace UltimaXNA.Ultima.World
             switch (msgType)
             {
                 case MessageTypes.Regular:
+                case MessageTypes.SpeechUnknown:
                     overhead = WorldModel.Entities.AddOverhead(msgType, serial, "<outline>" + text, font, hue);
                     if (overhead != null)
                     {
@@ -766,7 +797,7 @@ namespace UltimaXNA.Ultima.World
                     m_World.Interaction.ChatMessage("[COMMAND] " + text, font, hue);
                     break;
                 default:
-                    m_World.Interaction.ChatMessage("[[ERROR UNKNOWN COMMAND]] " + msgType.ToString());
+                    Tracer.Warn("Speech packet with unknown msgType parameter received. MsgType={0} Msg={1}", msgType, text);
                     break;
             }
         }
@@ -801,20 +832,22 @@ namespace UltimaXNA.Ultima.World
             Item entity = WorldModel.Entities.GetObject<Item>(p.VendorPackSerial, false);
             if (entity == null)
                 return;
-            // UserInterface.Merchant_Open(iObject, 0);
-            // !!!
+            m_UserInterface.RemoveControl<VendorBuyGump>();
+            m_UserInterface.AddControl(new VendorBuyGump(entity, p), 200, 200);
         }
 
         private void ReceiveSellList(IRecvPacket packet)
         {
-            announce_UnhandledPacket(packet);
+            VendorSellListPacket p = (VendorSellListPacket)packet;
+            m_UserInterface.RemoveControl<VendorSellGump>();
+            m_UserInterface.AddControl(new VendorSellGump(p), 200, 200);
         }
 
         private void ReceiveOpenPaperdoll(IRecvPacket packet)
         {
             OpenPaperdollPacket p = packet as OpenPaperdollPacket;
             if (m_UserInterface.GetControl<JournalGump>(p.Serial) == null)
-                m_UserInterface.AddControl(new PaperDollGump(WorldModel.Entities.GetObject<Mobile>(p.Serial, false), p.MobileName), 400, 100);
+                m_UserInterface.AddControl(new PaperDollGump(p.Serial), 400, 100);
         }
 
         private void ReceiveCompressedGump(IRecvPacket packet)
@@ -826,7 +859,7 @@ namespace UltimaXNA.Ultima.World
                 if (TryParseGumplings(p.GumpData, out gumpPieces))
                 {
                     Gump g = (Gump)m_UserInterface.AddControl(new Gump(p.GumpSerial, p.GumpTypeID, gumpPieces, p.TextLines), p.X, p.Y);
-                    g.IsMovable = true;
+                    g.IsMoveable = true;
                 }
             }
         }
@@ -880,8 +913,10 @@ namespace UltimaXNA.Ultima.World
         {
             MessageLocalizedAffixPacket p = (MessageLocalizedAffixPacket)packet;
 
+            // get the resource provider
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
             string localizedString = string.Format(p.Flag_IsPrefix ? "{1}{0}" : "{0}{1}",
-                constructCliLoc(StringData.Entry(p.CliLocNumber), p.Arguements), p.Affix);
+                constructCliLoc(provider.GetString(p.CliLocNumber), p.Arguements), p.Affix);
             ReceiveTextMessage(p.MessageType, localizedString, p.Hue, p.Font, p.Serial, p.SpeakerName);
         }
 
@@ -900,6 +935,9 @@ namespace UltimaXNA.Ultima.World
         {
             ObjectPropertyListPacket p = (ObjectPropertyListPacket)packet;
 
+            // get the resource provider
+            IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+
             AEntity entity = WorldModel.Entities.GetObject<AEntity>(p.Serial, false);
             if (entity == null)
                 return; // received property list for entity that does not exist.
@@ -909,15 +947,14 @@ namespace UltimaXNA.Ultima.World
 
             for (int i = 0; i < p.CliLocs.Count; i++)
             {
-                string iCliLoc = StringData.Entry(p.CliLocs[i]);
+                string strCliLoc = provider.GetString(p.CliLocs[i]);
                 if (p.Arguements[i] == string.Empty)
-                {
-                    entity.PropertyList.AddProperty(iCliLoc);
-                }
+                    strCliLoc = constructCliLoc(strCliLoc, capitalize: true);
                 else
-                {
-                    entity.PropertyList.AddProperty(constructCliLoc(iCliLoc, p.Arguements[i]));
-                }
+                    strCliLoc = constructCliLoc(strCliLoc, p.Arguements[i], true);
+                if (i == 0)
+                    strCliLoc = string.Format("<span color='#ff0'>{0}</span>", strCliLoc);
+                entity.PropertyList.AddProperty(strCliLoc);
             }
         }
 

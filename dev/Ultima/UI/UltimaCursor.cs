@@ -12,8 +12,9 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using UltimaXNA.Core.Graphics;
+using UltimaXNA.Core.Resources;
 using UltimaXNA.Core.UI;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 #endregion
 
 namespace UltimaXNA.Ultima.UI
@@ -22,6 +23,7 @@ namespace UltimaXNA.Ultima.UI
     {
         private HuedTexture m_CursorSprite = null;
         private int m_CursorSpriteArtIndex = -1;
+        protected Tooltip m_Tooltip = null;
 
         public int CursorSpriteArtIndex
         {
@@ -32,7 +34,8 @@ namespace UltimaXNA.Ultima.UI
                 {
                     m_CursorSpriteArtIndex = value;
 
-                    Texture2D art = ArtData.GetStaticTexture(m_CursorSpriteArtIndex);
+                    IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                    Texture2D art = provider.GetItemTexture(m_CursorSpriteArtIndex);
                     if (art == null)
                     {
                         // shouldn't we have a debug texture to show that we are missing this cursor art? !!!
@@ -81,7 +84,7 @@ namespace UltimaXNA.Ultima.UI
             // Over the interface or not in world. Display a default cursor.
             int artworkIndex = 8305;
 
-            if (WorldModel.IsInWorld && WorldModel.Entities.GetPlayerObject().Flags.IsWarMode)
+            if (WorldModel.IsInWorld && WorldModel.Entities.GetPlayerEntity().Flags.IsWarMode)
             {
                 // if in warmode, show the red-hued cursor.
                 artworkIndex -= 23;
@@ -102,6 +105,11 @@ namespace UltimaXNA.Ultima.UI
                 m_CursorSprite.Draw(spritebatch, position);
             }
 
+            DrawTooltip(spritebatch, position);
+        }
+
+        protected virtual void DrawTooltip(SpriteBatchUI spritebatch, Point position)
+        {
             if (m_UserInterface.IsMouseOverUI && m_UserInterface.MouseOverControl != null && m_UserInterface.MouseOverControl.HasTooltip)
             {
                 if (m_Tooltip != null && m_Tooltip.Caption != m_UserInterface.MouseOverControl.Tooltip)
@@ -124,7 +132,5 @@ namespace UltimaXNA.Ultima.UI
                 }
             }
         }
-
-        private Tooltip m_Tooltip = null;
     }
 }

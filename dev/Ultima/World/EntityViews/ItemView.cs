@@ -1,10 +1,11 @@
 ﻿using Microsoft.Xna.Framework;
 using UltimaXNA.Core.Graphics;
-using UltimaXNA.Ultima.IO;
+using UltimaXNA.Ultima.Resources;
 using UltimaXNA.Ultima.World.Entities.Items;
 using UltimaXNA.Ultima.World.Input;
 using UltimaXNA.Ultima.World.Maps;
 using UltimaXNA.Ultima.World.WorldViews;
+using UltimaXNA.Core.Resources;
 
 namespace UltimaXNA.Ultima.World.EntityViews
 {
@@ -33,7 +34,8 @@ namespace UltimaXNA.Ultima.World.EntityViews
             if (Entity.DisplayItemID != m_DisplayItemID)
             {
                 m_DisplayItemID = Entity.DisplayItemID;
-                DrawTexture = ArtData.GetStaticTexture(m_DisplayItemID);
+                IResourceProvider provider = ServiceRegistry.GetService<IResourceProvider>();
+                DrawTexture = provider.GetItemTexture(m_DisplayItemID);
 
                 if(DrawTexture == null)
                 {
@@ -48,7 +50,7 @@ namespace UltimaXNA.Ultima.World.EntityViews
             // Update hue vector.
             HueVector = Utility.GetHueVector(Entity.Hue, Entity.ItemData.IsPartialHue, false);
 
-            if (Entity.Amount > 1 && Entity.ItemData.IsGeneric)
+            if (Entity.Amount > 1 && Entity.ItemData.IsGeneric && Entity.DisplayItemID == Entity.ItemID)
             {
                 int offset = Entity.ItemData.Unknown4;
                 Vector3 offsetDrawPosition = new Vector3(drawPosition.X - 5, drawPosition.Y - 5, 0);
